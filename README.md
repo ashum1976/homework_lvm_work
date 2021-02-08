@@ -488,106 +488,282 @@ LVM также позволяет уменьшить размер тома. Дл
 
 
 
+            
+#                                                       2. Домашнне задание
+            
+Для уменьшения корневого раздела работающей машины,  можно загрузится с LiveCD и сделать в нём (создать временный раздел, скопировать туда весь корневой раздел, удалить корневой раздел на существующем LVM томе, создать новый lv раздел нужного размера, создать остальные необходимые разделы по ДЗ, вернуть данные обратно). Или создать новый временный раздел на рабочей машине, перенести туда данные, сконфигурировать загрузчик для запуска с нового раздела, загрузится с него, удалить старый раздел, создать новые разделы с нужными параметрами, вернуть данные, перегрузиться удалить временный раздел 
 
-Создание зеркала
-С помощью LVM мы может создать зеркальный том — данные, которые мы будем на нем сохранять, будут отправляться на 2 диска. Таким образом, если один из дисков выходит из строя, мы не потеряем свои данные.
+1.      Создаём временный раздел с нужной файловой системой
+        
+            [root@lvm ~]# lsblk                                                                                                               │
+            
+            NAME                    MAJ:MIN RM  SIZE RO TYPE MOUNTPOINT                                                                       │
+            sda                       8:0    0   40G  0 disk                                                                                  │
+            ├─sda1                    8:1    0    1M  0 part                                                                                  │
+            ├─sda2                    8:2    0    1G  0 part /boot                                                                            │
+            └─sda3                    8:3    0   39G  0 part                                                                                  │
+            ├─VolGroup00-LogVol00 253:0    0 37.5G  0 lvm  /                                                                                │
+            └─VolGroup00-LogVol01 253:1    0  1.5G  0 lvm  [SWAP]                                                                           │
+            sdb                       8:16   0   10G  0 disk                                                                                  │
+            sdc                       8:32   0    2G  0 disk                                                                                  │
+            sdd                       8:48   0    1G  0 disk                                                                                  │
+            sde                       8:64   0    1G  0 disk
+            
+            [root@lvm ~]# pvcreate /dev/sdb                                                                                                   │
+            Physical volume "/dev/sdb" successfully created.                                                                                │
+            
+            [root@lvm ~]# vgcreate vghw /dev/sdb                                                                                              │
+            Volume group "vghw" successfully created                                                                                        │
+            
+            [root@lvm ~]# lvcreate -n lv_hw_root -l+100%FREE vghw                                                                             │
+            Logical volume "lv_hw_root" created.                                                                                            │
+            
+            [root@lvm ~]# mkfs.xfs /dev/vghw/lv_hw_root                                                                                       │
+            meta-data=/dev/vghw/lv_hw_root   isize=512    agcount=4, agsize=655104 blks                                                       │
+            =                       sectsz=512   attr=2, projid32bit=1                                                               │
+            =                       crc=1        finobt=0, sparse=0                                                                  │
+            data     =                       bsize=4096   blocks=2620416, imaxpct=25                                                          │
+            =                       sunit=0      swidth=0 blks                                                                       │
+            naming   =version 2              bsize=4096   ascii-ci=0 ftype=1                                                                  │
+            log      =internal log           bsize=4096   blocks=2560, version=2                                                              │
+            =                       sectsz=512   sunit=0 blks, lazy-count=1                                                          │
+            realtime =none                   extsz=4096   blocks=0, rtextents=0
+            
+            
+2.      Перенос данных со старого раздела на новый
 
-Зеркалирование томов выполняется из группы, где есть, минимум, 2 диска.
+            
+            [root@lvm ~]# mount /dev/vghw/lv_hw_root /mnt/
 
-1. Сначала инициализируем диски:
+            копирование данных:
+            
+            [root@lvm ~]# xfsdump -l0 -J - /dev/VolGroup00/LogVol00 | xfsrestory -l0 -J - /mnt/
+            
+3.     Изменение конфигурации grub, для загрузки с нового тома
 
-pvcreate /dev/sd{d,e}
 
-* в данном примере sdd и sde.
+            [root@lvm ~]# for i in /proc /sys /dev  /run /boot ; do mount --bind $i /mnt/$i; done <- биндим необходимые каталоги для имитации корневого раздела в папке где смонтирован временный том
+            
+            [root@lvm ~]# chroot /mnt <- делаем темповый раздел корневым
+            
+            
+       Поверяем, что находимся в нужной точке:
+       
+            [root@lvm /]# mount                                                                                                               │
+            /dev/mapper/vghw-lv_hw_root on / type xfs (rw,relatime,seclabel,attr2,inode64,noquota)     <-    Номер инода, отличный от 2, указывает на то, что видимый корень не является фактическим корнем файловой системы                                │
+            proc on /proc type proc (rw,nosuid,nodev,noexec,relatime)                                                                         │
+            sysfs on /sys type sysfs (rw,nosuid,nodev,noexec,relatime,seclabel)                                                               │
+            devtmpfs on /dev type devtmpfs (rw,nosuid,seclabel,size=110948k,nr_inodes=27737,mode=755)                                         │
+            tmpfs on /run type tmpfs (rw,nosuid,nodev,seclabel,mode=755)                                                                      │
+            /dev/sda2 on /boot type xfs (rw,relatime,seclabel,attr2,inode64,noquota)                                                          │
+       или
+            
+            [root@lvm /]# ls -di /                                                                         │
+             64 /           <-             Номер инода, отличный от 2, указывает на то, что видимый корень не является фактическим корнем файловой системы 
+           
+           [root@lvm /]# grub2-mkconfig -o /boot/grub2/grub.cfg
+            
+        генерируем новый grub:
+        
+            [root@lvm /]# grub2-mkconfig -o /boot/grub2/grub.cfg                                                                              │
+            Generating grub configuration file ...                                                                                            │
+            Found linux image: /boot/vmlinuz-3.10.0-862.2.3.el7.x86_64                                                                        │
+            Found initrd image: /boot/initramfs-3.10.0-862.2.3.el7.x86_64.img
+            
+4.      Обновление образа initrd:
 
-2. Создаем группу:
+            [root@lvm boot]# for i in `ls initramfs-*img`; do dracut -v $i `echo $i|sed "s/initramfs-//g;s/.img//g"` --force; done
+            
+            ...........
+            ** Created microcode section ***                                                                                             
+            *** Creating image file done ***                                                                                                 
+            *** Creating initramfs image file '/boot/initramfs-3.10.0-862.2.3.el7.x86_64.img' done ***
+            
+            
+        Меняем значение корневого раздела в файле /boot/grub2/grub.cfg
+            
+            [root@lvm ~]# vi /boot/grub2/grub.cfg
+            
+            находим строчку rd.lvm.lv=VolGroup00/LogVol00 и меняем на rd.lvm.lv=vghw/lv_hw_root
 
-vgcreate vg02 /dev/sd{d,e}
+            
+5.      Загрузка с новым корневым разделом, создание разделов с нужными параметрами 
+            
+        смотрим, что загрузились с нужным корневым разделом:
+                
+                [root@lvm ~]# lsblk                                                                                                                                                        
+                NAME                    MAJ:MIN RM  SIZE RO TYPE MOUNTPOINT                                             
+                sda                       8:0    0   40G  0 disk                                                                                
+                ├─sda1                    8:1    0    1M  0 part                                                                           
+                ├─sda2                    8:2    0    1G  0 part /boot                                                                      
+                └─sda3                    8:3    0   39G  0 part                                                                               
+                ├─VolGroup00-LogVol00 253:0    0 37.5G  0 lvm                                                                                   │
+                └─VolGroup00-LogVol01 253:2    0  1.5G  0 lvm  [SWAP]                                                                           │
+                sdb                       8:16   0   10G  0 disk                                                                                  │
+                └─vghw-lv_hw_root       253:1    0   10G  0 lvm  /                                                                                │
+                sdc                       8:32   0    2G  0 disk                                                                                  │
+                sdd                       8:48   0    1G  0 disk                                                                                  │
+                sde                       8:64   0    1G  0 disk                                                                                  │
+                
+                [root@lvm ~]# lvremove /dev/VolGroup00/LogVol00                                                                                   │
+                Do you really want to remove active logical volume VolGroup00/LogVol00? [y/n]: y                                                  │
+                Logical volume "LogVol00" successfully removed                                                                                  │
+                
+                [root@lvm ~]# lvcreate -n VolGroup00/LogVol00 -L 8G /dev/VolGroup00          <---- Создали "/" раздел 8G размера                                                     │
+                WARNING: xfs signature detected on /dev/VolGroup00/LogVol00 at offset 0. Wipe it? [y/n]: y                                        │
+                Wiping xfs signature on /dev/VolGroup00/LogVol00.                                                                               │
+                Logical volume "LogVol00" created.
 
-3. Создаем зеркальный том: 
+                
+        Далее создаём файловую систему, монтируем LogVol00 раздел в папку mnt и восстанавливаем данные как в предыдущем варианте:
+        
+                root@lvm ~]# mkfs.xfs /dev/VolGroup00/LogVol00
+               
+               meta-data=/dev/VolGroup00/LogVol00 isize=512    agcount=4, agsize=524288 blks
+                =                       sectsz=512   attr=2, projid32bit=1
+                =                       crc=1        finobt=0, sparse=0
+                data     =                       bsize=4096   blocks=2097152, imaxpct=25
+                =                       sunit=0      swidth=0 blks
+                naming   =version 2              bsize=4096   ascii-ci=0 ftype=1
+                log      =internal log           bsize=4096   blocks=2560, version=2
+                =                       sectsz=512   sunit=0 blks, lazy-count=1
+                realtime =none                   extsz=4096   blocks=0, rtextents=0
+                
+                [root@lvm ~]# mount /dev/VolGroup00/LogVol00 /mnt
+                
+                [root@lvm ~]# xfsdump -l0 -J - /dev/vghw/lv_hw_root | xfsrestore -l0 -J  - /mnt
+                
+                
+        Изменение конфигурации grub, для загрузки со старого тома:
 
-lvcreate -L200 -m1 -n lv-mir vg02
 
-* мы создали том lv-mir на 200 Мб из группы vg02.
+                [root@lvm ~]# for i in /proc /sys /dev  /run /boot ; do mount --bind $i /mnt/$i; done <- биндим необходимые каталоги для имитации корневого раздела в папке где смонтирован временный том
+            
+                [root@lvm ~]# chroot /mnt <- делаем темповый раздел корневым
+                
+                [root@lvm /]# grub2-mkconfig -o /boot/grub2/grub.cfg  
+                
+                [root@lvm /]# cd /boot          <----- переходим в boot каталог                       
+                
+                [root@lvm boot]# for i in `ls initramfs-*img`; do dracut -v $i `echo $i|sed "s/initramfs-//g;s/.img//g"` --force; done            <----- генерируем новый initramfs
+                
+        Создание зеркала на свободных дисках для отдельного раздела var:
+        
+                [root@lvm boot]# pvcreate /dev/sdd /dev/sdc   <-------- готовим диски для LVM
+                
+                Physical volume "/dev/sdd" successfully created.
+                Physical volume "/dev/sdc" successfully created.
 
-В итоге:
+                [root@lvm boot]# vgcreate vghw_var /dev/sdd /dev/sdc    <----------- создаём новую volume group с именем vghw_var
+                
+                Volume group "vghw_var" successfully created
+        
+        
+                [root@lvm boot]# lvcreate -L 900M -m1 -n lv_hw_var vghw_var          <----------- создали зеркальный том, размером 900M потому что один диск 2G а второй 1G.
+                
+                Logical volume "lv_hw_var" created.
+                
+                [root@lvm boot]# mkfs.ext4 /dev/vghw_var/lv_hw_var   <-------------- создали файловую систему
+                               
+                mke2fs 1.42.9 (28-Dec-2013)
+                
+                mount  /dev/vghw_var/lv_hw_var /mnt            <----------- монтируем новый раздел и копируем на него данные со старой папки /var
+                
+                
+                [root@lvm boot]# cp -aR /var/* /mnt/   <------ копируем содержимое /var каталог в новый раздел                                                                                                                                                                                                        
+                
+                [root@lvm boot]# rsync -avHPSAX /var /mnt   
+                
+                
+        Удаляем содержимое старой папки /var и монтируем новый том в папку:
+        
+                [root@lvm boot]# rm -rf /var/* 
+                
+                [root@lvm boot]# mount /dev/vghw_var/lv_hw_var /var  
+                
+                
+        Изменяем файл /etc/fstab, для автоматического монтирования /var при запуске сисетмы
+                    
+                [root@lvm boot]# blkid        
 
-lsblk
+                /dev/mapper/vghw_var-lv_hw_var_rimage_0: UUID="dd8f0ac1-2591-4dc4-b49c-aa55bea29ae5" TYPE="ext4"
+                /dev/mapper/vghw_var-lv_hw_var_rimage_1: UUID="dd8f0ac1-2591-4dc4-b49c-aa55bea29ae5" TYPE="ext4"
+                /dev/mapper/vghw_var-lv_hw_var: UUID="dd8f0ac1-2591-4dc4-b49c-aa55bea29ae5" TYPE="ext4"                       <------------ получаем UUID и вносим в файл fstab
+                
+                UUID=dd8f0ac1-2591-4dc4-b49c-aa55bea29ae5       /var    ext4    defaults        0 0        <----- монтирование по UUID можно по устройству "/dev/vghw_var/lv_hw_var"
+                
+         После перезагрузки очищаем ненужный том, группу, и выводим биск из LVM  (lv_hw_root, vghw, /dev/sdb )
+         
+         
+                [root@lvm ~]# lvremove /dev/vghw/lv_hw_root 
+                Do you really want to remove active logical volume vghw/lv_hw_root? [y/n]: y
+                Logical volume "lv_hw_root" successfully removed
 
-... мы увидим что-то на подобие:
+                root@lvm ~]# vgremove vghw 
+                Volume group "vghw" successfully removed
+                
+                [root@lvm ~]# pvremove /dev/sdb
+                Labels on physical volume "/dev/sdb" successfully wiped.
 
-sdd                       8:16   0    1G  0 disk
-  vg02-lv--mir_rmeta_0  253:2    0    4M  0 lvm
-    vg02-lv--mir        253:6    0  200M  0 lvm
-  vg02-lv--mir_rimage_0 253:3    0  200M  0 lvm
-    vg02-lv--mir        253:6    0  200M  0 lvm
-sde                       8:32   0    1G  0 disk
-  vg02-lv--mir_rmeta_1  253:4    0    4M  0 lvm
-    vg02-lv--mir        253:6    0  200M  0 lvm
-  vg02-lv--mir_rimage_1 253:5    0  200M  0 lvm
-    vg02-lv--mir        253:6    0  200M  0 lvm
+                
+6.      Home разде со снапшотами
 
-* как видим, на двух дисках у нас появились разделы по 200 Мб.
+                [root@lvm ~]# lvcreate -n LogVol_Home -L 2G VolGroup00  <--------------- создали новый раздел в LVM группе  VolGroup00
+                Logical volume "LogVol_Home" created.
 
-Работа со снапшотами
-Снимки диска позволят нам откатить состояние на определенный момент. Это может послужить быстрым вариантом резервного копирования. Однако нужно понимать, что данные хранятся на одном и том же физическом носителе, а значит, данный способ не является полноценным резервным копированием.
+            [root@lvm ~]# mkfs.xfs /dev/VolGroup00/LogVol_Home  < ------------- Создаём файловую систему на разделе
+            
+            meta-data=/dev/VolGroup00/LogVol_Home isize=512    agcount=4, agsize=131072 blks
+            =                       sectsz=512   attr=2, projid32bit=1
+            =                       crc=1        finobt=0, sparse=0
+            data     =                       bsize=4096   blocks=524288, imaxpct=25
+            =                       sunit=0      swidth=0 blks
+            naming   =version 2              bsize=4096   ascii-ci=0 ftype=1
+            log      =internal log           bsize=4096   blocks=2560, version=2
+            =                       sectsz=512   sunit=0 blks, lazy-count=1
+            realtime =none                   extsz=4096   blocks=0, rtextents=0
+        
+        Монтируем новый раздел в промежуточную папку, копируем со старой папки Home в эту промежуточную папку, удаляем содержимое старой, отмонтируем новый раздел, примонтировать по новой и прописать в fstab по UUID
+        
+            [root@lvm ~]# mount /dev/VolGroup00/LogVol_Home /mnt/
+            [root@lvm ~]# cp -aR /home/* /mnt/
+            [root@lvm ~]# rm -rf /home/*
+            [root@lvm ~]# umount /mnt
+            [root@lvm ~]# mount /dev/VolGroup00/LogVol_Home /home/
+            [root@lvm ~]# blkid
+            .......................
+            /dev/mapper/VolGroup00-LogVol_Home: UUID="bb3bddf8-546b-4a80-a5c0-a10d7a570b4f" TYPE="xfs"
 
-Создание снапшотов для тома, где уже используется файловая система XFS, имеет некоторые нюансы, поэтому разберем разные примеры.
+        Проверка работы снапшотов:
+        
+            [root@lvm ~]# touch /home/test{1..10}  < -------------- сгенерировали 10 тестовых файлов
+            [root@lvm ~]# lvcreate -L 100M -s -n home_snap /dev/VolGroup00/LogVol_Home < ------------- создали снапшот-раздел раздела LogVol_Home
+            Rounding up size to full physical extent 128.00 MiB
+            Logical volume "home_snap" created.
 
-Создание для не XFS:
+            
+            [root@lvm ~]# rm -f /home/test{5..9}
+           
+            [root@lvm ~]# ls /home/
+            test1  test10  test2  test3  test4 
+            
+            
+            root@lvm ~]# lvconvert --merge /dev/VolGroup00/
+            home_snap    LogVol00     LogVol01     LogVol_Home  
+            
+            [root@lvm ~]# lvconvert --merge /dev/VolGroup00/home_snap 
+            Merging of volume VolGroup00/home_snap started.
+            VolGroup00/LogVol_Home: Merged: 100.00%
+            
+            [root@lvm ~]# ls /home/
+            
+            [root@lvm ~]# mount /home
+            
+            [root@lvm ~]# ls /home/
+            test1  test10  test2  test3  test4  test5  test6  test7  test8  test9
+            
+            
 
-lvcreate -L500 -s -n sn01 /dev/vg01/lv01
-
-* данная команда помечает, что 500 Мб дискового пространства устройства /dev/vg01/lv01 (тома lv01 группы vg01) будет использоваться для snapshot (опция -s).
-
-Создание для XFS:
-
-xfs_freeze -f /mnt; lvcreate -L500 -s -n sn01 /dev/vg01/lv01; xfs_freeze -u /mnt
-
-* команда xfs_freeze замораживает операции в файловой системе XFS.
-
-Посмотрим список логических томов:
-
-lvs
-
-Получим что-то на подобие:
-
-LV   VG   Attr       LSize   Pool Origin Data%  Meta%  Move Log Cpy%Sync Convert
-lv01 vg01 owi-aos---   1,00g
-sn01 vg01 swi-a-s--- 500,00m      lv01   2,07
-
-* поле Origin показывает, к какому оригинальному логическому тому относится LV, например, в данной ситуации наш раздел для снапшотов относится к lv01.
-
-Также можно посмотреть изменения в томах командой:
-
-lsblk
-
-Мы должны увидеть что-то подобное:
-
-sdc                8:32   0    1G  0 disk 
-  vg01-lv01-real 253:3    0    1G  0 lvm  
-    vg01-lv01    253:2    0    1G  0 lvm  /mnt
-    vg01-sn01    253:5    0    1G  0 lvm  
-  vg01-sn01-cow  253:4    0  500M  0 lvm  
-    vg01-sn01    253:5    0    1G  0 lvm 
-
-С этого момента все изменения пишутся в vg01-sn01-cow, а vg01-lv01-real фиксируется только для чтения и мы может откатиться к данному состоянию диска в любой момент.
-
-Содержимое снапшота можно смонтировать и посмотреть, как обычный раздел:
-
-mkdir /tmp/snp
-
-Монтирование не XFS:
-
-mount /dev/vg01/sn01 /tmp/snp
-
-Монтирование XFS:
-
-mount -o nouuid,ro /dev/vg01/sn01 /tmp/snp
-
-Для выполнения отката до снапшота, выполняем команду:
-
-lvconvert --merge /dev/vg01/sn01
             
             
             
