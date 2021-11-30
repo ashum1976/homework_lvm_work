@@ -62,12 +62,12 @@ LVM — менеджер, позволяющий управлять логиче
 
 Есть диски /dev/sdb, /dev/sdc, /dev/sdd, /dev/sde  на них будм создавать новый том LVM
 
-            1.2.1 Создание разделов
+###            1.2.1 Создание разделов
 
 Помечаем диски, что они будут использоваться для LVM:
 
             pvcreate /dev/sdb
-            Physical volume "/dev/sdc" successfully created.
+            Physical volume "/dev/sdb" successfully created.
 
 
 команда pvdisplay покажет диски, которые можно использовать для создания LVM
@@ -100,7 +100,7 @@ LVM — менеджер, позволяющий управлять логиче
 
 
 
-            1.2.2 Создание групп томов
+###            1.2.2 Создание групп томов
 
 
 Инициализированные на первом этапе диски должны быть объединены в группы.
@@ -391,7 +391,7 @@ Cоздания логических томов:
 #                                                        1.5 Уменьшение томов
 
 
-* Размер некоторый файловых систем, например, XFS уменьшить нельзя. Из положения можно выйти, создав новый уменьшенный том с переносом на него данных и                 последующим удалением.
+* Размер некоторый файловых систем, например, XFS уменьшить нельзя. Из положения можно выйти, создав новый уменьшенный том с переносом на него данных и    последующим удалением.
 
 LVM также позволяет уменьшить размер тома. Для этого необходимо выполнить его отмонтирование, проверить  на ошибки и уменьшить размер:
 
@@ -529,7 +529,16 @@ LVM также позволяет уменьшить размер тома. Дл
 
 
 
+#                                                     1.8 Перемещение физических и логических томов
 
+
+Чтобы переместить только выбранный логический том, гужно как и с физическим томом выполнить команду:
+
+      pvmove -n /dev/vghw/rootvghw /dev/sdb /dev/sdc
+
+      где:
+
+      n - указание команде перенести логический том rootvghw, находящийся например на /dev/sdb физическом томеб группы vghw (узнать можно командой **pvdisplay -m**), на новый физический том /dev/sdc из группы vghw.  
 
 
 
@@ -544,38 +553,38 @@ ___
 
 1.      Создаём временный раздел с нужной файловой системой
 
-            [root@lvm ~]# lsblk                                                                                                               │
+            [root@lvm ~]# lsblk                                                                                                               
 
-            NAME                    MAJ:MIN RM  SIZE RO TYPE MOUNTPOINT                                                                       │
-            sda                       8:0    0   40G  0 disk                                                                                  │
-            ├─sda1                    8:1    0    1M  0 part                                                                                  │
-            ├─sda2                    8:2    0    1G  0 part /boot                                                                            │
-            └─sda3                    8:3    0   39G  0 part                                                                                  │
-            ├─VolGroup00-LogVol00 253:0    0 37.5G  0 lvm  /                                                                                │
-            └─VolGroup00-LogVol01 253:1    0  1.5G  0 lvm  [SWAP]                                                                           │
-            sdb                       8:16   0   10G  0 disk                                                                                  │
-            sdc                       8:32   0    2G  0 disk                                                                                  │
-            sdd                       8:48   0    1G  0 disk                                                                                  │
+            NAME                    MAJ:MIN RM  SIZE RO TYPE MOUNTPOINT                                                                       
+            sda                       8:0    0   40G  0 disk                                                                                  
+            ├─sda1                    8:1    0    1M  0 part                                                                                  
+            ├─sda2                    8:2    0    1G  0 part /boot                                                                            
+            └─sda3                    8:3    0   39G  0 part                                                                                  
+            ├─VolGroup00-LogVol00 253:0    0 37.5G  0 lvm  /                                                                                
+            └─VolGroup00-LogVol01 253:1    0  1.5G  0 lvm  [SWAP]                                                                           
+            sdb                       8:16   0   10G  0 disk                                                                                  
+            sdc                       8:32   0    2G  0 disk                                                                                  
+            sdd                       8:48   0    1G  0 disk                                                                                  
             sde                       8:64   0    1G  0 disk
 
-            [root@lvm ~]# pvcreate /dev/sdb                                                                                                   │
-            Physical volume "/dev/sdb" successfully created.                                                                                │
+            [root@lvm ~]# pvcreate /dev/sdb                                                                                                   
+            Physical volume "/dev/sdb" successfully created.                                                                                
 
-            [root@lvm ~]# vgcreate vghw /dev/sdb                                                                                              │
-            Volume group "vghw" successfully created                                                                                        │
+            [root@lvm ~]# vgcreate vghw /dev/sdb                                                                                              
+            Volume group "vghw" successfully created                                                                                        
 
-            [root@lvm ~]# lvcreate -n lv_hw_root -l+100%FREE vghw                                                                             │
-            Logical volume "lv_hw_root" created.                                                                                            │
+            [root@lvm ~]# lvcreate -n lv_hw_root -l+100%FREE vghw                                                                             
+            Logical volume "lv_hw_root" created.                                                                                            
 
-            [root@lvm ~]# mkfs.xfs /dev/vghw/lv_hw_root                                                                                       │
-            meta-data=/dev/vghw/lv_hw_root   isize=512    agcount=4, agsize=655104 blks                                                       │
-            =                       sectsz=512   attr=2, projid32bit=1                                                               │
-            =                       crc=1        finobt=0, sparse=0                                                                  │
-            data     =                       bsize=4096   blocks=2620416, imaxpct=25                                                          │
-            =                       sunit=0      swidth=0 blks                                                                       │
-            naming   =version 2              bsize=4096   ascii-ci=0 ftype=1                                                                  │
-            log      =internal log           bsize=4096   blocks=2560, version=2                                                              │
-            =                       sectsz=512   sunit=0 blks, lazy-count=1                                                          │
+            [root@lvm ~]# mkfs.xfs /dev/vghw/lv_hw_root                                                                                       
+            meta-data=/dev/vghw/lv_hw_root   isize=512    agcount=4, agsize=655104 blks                                                       
+            =                       sectsz=512   attr=2, projid32bit=1                                                               
+            =                       crc=1        finobt=0, sparse=0                                                                  
+            data     =                       bsize=4096   blocks=2620416, imaxpct=25                                                          
+            =                       sunit=0      swidth=0 blks                                                                       
+            naming   =version 2              bsize=4096   ascii-ci=0 ftype=1                                                                  
+            log      =internal log           bsize=4096   blocks=2560, version=2                                                              
+            =                       sectsz=512   sunit=0 blks, lazy-count=1                                                          
             realtime =none                   extsz=4096   blocks=0, rtextents=0
 
 
@@ -600,17 +609,17 @@ ___
 
        Поверяем, что находимся в нужной точке:
 
-            [root@lvm /]# mount                                                                                                               │
-            /dev/mapper/vghw-lv_hw_root on / type xfs (rw,relatime,seclabel,attr2,inode64,noquota)     <-    Номер инода, отличный от 2, указывает на то, что видимый корень не является фактическим корнем файловой системы   (для виртуальных машин не работает)                             │
-            proc on /proc type proc (rw,nosuid,nodev,noexec,relatime)                                                                         │
-            sysfs on /sys type sysfs (rw,nosuid,nodev,noexec,relatime,seclabel)                                                               │
-            devtmpfs on /dev type devtmpfs (rw,nosuid,seclabel,size=110948k,nr_inodes=27737,mode=755)                                         │
-            tmpfs on /run type tmpfs (rw,nosuid,nodev,seclabel,mode=755)                                                                      │
-            /dev/sda2 on /boot type xfs (rw,relatime,seclabel,attr2,inode64,noquota)                                                          │
+            [root@lvm /]# mount                                                                                                               
+            /dev/mapper/vghw-lv_hw_root on / type xfs (rw,relatime,seclabel,attr2,inode64,noquota)     <-    Номер инода, отличный от 2, указывает на то, что видимый корень не является фактическим корнем файловой системы   (для виртуальных машин не работает)                             
+            proc on /proc type proc (rw,nosuid,nodev,noexec,relatime)                                                                         
+            sysfs on /sys type sysfs (rw,nosuid,nodev,noexec,relatime,seclabel)                                                               
+            devtmpfs on /dev type devtmpfs (rw,nosuid,seclabel,size=110948k,nr_inodes=27737,mode=755)                                         
+            tmpfs on /run type tmpfs (rw,nosuid,nodev,seclabel,mode=755)                                                                      
+            /dev/sda2 on /boot type xfs (rw,relatime,seclabel,attr2,inode64,noquota)                                                          
        или
 
-            [root@lvm /]# ls -di /                                                                         │
-             64 /           <-             Номер инода, отличный от 2, указывает на то, что видимый корень не является фактическим корнем файловой системы (для виртуальных машин не работает)
+            [root@lvm /]# ls -di /                                                                         
+             64 /           <-    Номер инода, отличный от 2, указывает на то, что видимый корень не является фактическим корнем файловой системы (для виртуальных машин не работает)
 
 4.      Обновление образа initrd:
 
@@ -650,21 +659,21 @@ ___
                 ├─sda1                    8:1    0    1M  0 part                                                                           
                 ├─sda2                    8:2    0    1G  0 part /boot                                                                      
                 └─sda3                    8:3    0   39G  0 part                                                                               
-                ├─VolGroup00-LogVol00 253:0    0 37.5G  0 lvm                                                                                   │
-                └─VolGroup00-LogVol01 253:2    0  1.5G  0 lvm  [SWAP]                                                                           │
-                sdb                       8:16   0   10G  0 disk                                                                                  │
-                └─vghw-lv_hw_root       253:1    0   10G  0 lvm  /                                                                                │
-                sdc                       8:32   0    2G  0 disk                                                                                  │
-                sdd                       8:48   0    1G  0 disk                                                                                  │
-                sde                       8:64   0    1G  0 disk                                                                                  │
+                ├─VolGroup00-LogVol00 253:0    0 37.5G  0 lvm                                                                                   
+                └─VolGroup00-LogVol01 253:2    0  1.5G  0 lvm  [SWAP]                                                                           
+                sdb                       8:16   0   10G  0 disk                                                                                  
+                └─vghw-lv_hw_root       253:1    0   10G  0 lvm  /                                                                                
+                sdc                       8:32   0    2G  0 disk                                                                                  
+                sdd                       8:48   0    1G  0 disk                                                                                  
+                sde                       8:64   0    1G  0 disk                                                                                  
 
-                [root@lvm ~]# lvremove /dev/VolGroup00/LogVol00                                                                                   │
-                Do you really want to remove active logical volume VolGroup00/LogVol00? [y/n]: y                                                  │
-                Logical volume "LogVol00" successfully removed                                                                                  │
+                [root@lvm ~]# lvremove /dev/VolGroup00/LogVol00                                                                                   
+                Do you really want to remove active logical volume VolGroup00/LogVol00? [y/n]: y                                                  
+                Logical volume "LogVol00" successfully removed                                                                                  
 
-                [root@lvm ~]# lvcreate -n VolGroup00/LogVol00 -L 8G /dev/VolGroup00          <---- Создали "/" раздел 8G размера                                                     │
-                WARNING: xfs signature detected on /dev/VolGroup00/LogVol00 at offset 0. Wipe it? [y/n]: y                                        │
-                Wiping xfs signature on /dev/VolGroup00/LogVol00.                                                                               │
+                [root@lvm ~]# lvcreate -n VolGroup00/LogVol00 -L 8G /dev/VolGroup00          <---- Создали "/" раздел 8G размера                                                     
+                WARNING: xfs signature detected on /dev/VolGroup00/LogVol00 at offset 0. Wipe it? [y/n]: y                                        
+                Wiping xfs signature on /dev/VolGroup00/LogVol00.                                                                               
                 Logical volume "LogVol00" created.
 
 
@@ -706,9 +715,9 @@ ___
 -      rd.lvm.lv= vghw/vghw_root  - на значение  rd.lvm.lv=VolGroup00/LogVol00 (наш старый  корневой раздел, размером 8Gb )
 
 
-            [root@lvm /]# grub2-mkconfig -o /boot/grub2/grub.cfg  <------- генерируем новый конфиг                                                                              │
-            Generating grub configuration file ...                                                                                            │
-            Found linux image: /boot/vmlinuz-3.10.0-862.2.3.el7.x86_64                                                                        │
+            [root@lvm /]# grub2-mkconfig -o /boot/grub2/grub.cfg  <------- генерируем новый конфиг                                                                              
+            Generating grub configuration file ...                                                                                            
+            Found linux image: /boot/vmlinuz-3.10.0-862.2.3.el7.x86_64                                                                        
             Found initrd image: /boot/initramfs-3.10.0-862.2.3.el7.x86_64.img
 
 
