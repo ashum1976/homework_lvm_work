@@ -26,6 +26,15 @@ LVM — менеджер, позволяющий управлять логиче
             Физический экстент (PE). Разделение физических томов. Размер 4Mb
             Логический экстент (LE). Разделение логических томов.
 
+___
+
+Опции используемые при работе с **thin LV**
+
+- **discard** — устанавливается как опция монтировании файловой системы. Позволяет ядру Linux сразу отправлять команду TRIM на устройство, как только об этом сообщит файловая система.
+- **fstrim** — утилита которая запускается вручную или по расписанию как сервис ОС, отправляет список удаленных блоков с ФС для зачистки их на устройстве.
+
+
+
 #                                                       1.2 Установка
 
 Для работы с LVM необходима установка одноименной утилиты lvm2. В Vagrantfile, в секции provision добавляем для установки с помощью yum (yum install ..... lvm2)
@@ -99,6 +108,22 @@ LVM — менеджер, позволяющий управлять логиче
 - PV UUID — идентификатор физического раздела.
 
 
+* _**Атрибуты состояния физических томов:**_
+
+            # pvs
+              PV         VG   Fmt  Attr PSize   PFree
+              /dev/md1   vg0  lvm2 a--  930,45g 38,11g
+            # pvs
+              PV         VG   Fmt  Attr PSize   PFree
+              /dev/md1   vg0  lvm2 a--  930,45g 38,11g
+
+Attr:  
+- 1 bit — (**a**)llocatable
+- 2 bit — e(**x**)ported
+- 3 bit — (**m**)issing
+
+
+
 
 ###            1.2.2 Создание групп томов
 
@@ -140,26 +165,26 @@ LVM — менеджер, позволяющий управлять логиче
 
 
 
-            --- Volume group ---                                                                           
-  VG Name               vghw                                                                     
-  System ID                                                                                      
-  Format                lvm2                                                                    
-  Metadata Areas        1                                                                     
-  Metadata Sequence No  2                                                                      
-  VG Access             read/write                                                           
-  VG Status             resizable                                                             
-  MAX LV                0                                                                     
-  Cur LV                1                                                                   
-  Open LV               0                                                               
-  Max PV                0                                                             
-  Cur PV                1                                                         
-  Act PV                1                                                         
-  VG Size               <10.00 GiB                                                          
-  PE Size               4.00 MiB                                                             
-  Total PE              2559                                                                                               
-  Alloc PE / Size       2048 / 8.00 GiB                                                       
-  Free  PE / Size       511 / <2.00 GiB                                                                                
-  VG UUID               7YMmA6-ENcd-zC1h-kUow-coXW-zKY1-S0RhfN
+                      --- Volume group ---                                                                           
+            VG Name               vghw                                                                     
+            System ID                                                                                      
+            Format                lvm2                                                                    
+            Metadata Areas        1                                                                     
+            Metadata Sequence No  2                                                                      
+            VG Access             read/write                                                           
+            VG Status             resizable                                                             
+            MAX LV                0                                                                     
+            Cur LV                1                                                                   
+            Open LV               0                                                               
+            Max PV                0                                                             
+            Cur PV                1                                                         
+            Act PV                1                                                         
+            VG Size               <10.00 GiB                                                          
+            PE Size               4.00 MiB                                                             
+            Total PE              2559                                                                                               
+            Alloc PE / Size       2048 / 8.00 GiB                                                       
+            Free  PE / Size       511 / <2.00 GiB                                                                                
+            VG UUID               7YMmA6-ENcd-zC1h-kUow-coXW-zKY1-S0RhfN
 
 * где:
 
@@ -173,6 +198,26 @@ LVM — менеджер, позволяющий управлять логиче
 - Alloc PE / Size — распределенное пространство: колическтво экстентов / объем.
 - Free  PE / Size — свободное пространство: колическтво экстентов / объем.
 - VG UUID — идентификатор группы.
+
+_**Атрибуты состояния групп томов:**_
+
+            # vgs
+              VG      #PV #LV #SN Attr   VSize   VFree  
+              cluster   1   2   0 wz--n- 931.48g 731.48g
+              pve       1   3   0 wz--n- 931.38g  16.00g
+            # vgs
+              VG      #PV #LV #SN Attr   VSize   VFree  
+              cluster   1   2   0 wz--n- 931.48g 731.48g
+              pve       1   3   0 wz--n- 931.38g  16.00g
+
+- 1 bit — Permissions: (**w**)riteable, (**r**)ead-only
+- 2 bit — Resi(**z**)eable  
+- 3 bit — E(**x**)ported  
+- 4 bit — (**p**)artial: one or more physical volumes belonging to the volume group are missing from the system  
+- 5 bit — Allocation policy: (**c**)ontiguous, c(**l**)ing, (**n**)ormal, (**a**)nywhere, (**i**)nherited  
+- 6 bit — (**c**)lustered  
+
+
 
 
             1.2.3 Создание логических томов
@@ -221,6 +266,32 @@ Cоздания логических томов:
 - LV Size — объем дискового пространства, доступный для использования.
 - Current LE — количество логических экстентов.
 
+_**Атрибуты состояния логический точеских томов:**_
+
+            # lvs
+              LV            VG      Attr      LSize   Pool Origin Data%  Move Log Copy%  Convert
+              vm-100-disk-1 cluster -wi-ao--- 100.00g                                           
+              vm-102-disk-1 cluster -wi-ao--- 100.00g                                           
+              data          pve     -wi-ao--- 847.39g                                           
+              root          pve     -wi-ao---  60.00g                                           
+              swap          pve     -wi-ao---   8.00g
+            # lvs
+              LV            VG      Attr      LSize   Pool Origin Data%  Move Log Copy%  Convert
+              vm-100-disk-1 cluster -wi-ao--- 100.00g                                           
+              vm-102-disk-1 cluster -wi-ao--- 100.00g                                           
+              data          pve     -wi-ao--- 847.39g                                           
+              root          pve     -wi-ao---  60.00g                                           
+              swap          pve     -wi-ao---   8.00g
+
+- 1 bit — **_Volume type:_** (**m**)irrored, (**M**)irrored without initial sync, (**o**)rigin, (**O**)rigin with merging snapshot, (**r**)aid, (**R**)aid without initial sync, (**s**)napshot, merging (**S**)napshot, (**p**)vmove, (**v**)irtual, mirror or raid (**i**)mage, mirror or raid (**I**)mage out-of-sync, mirror (**l**)og device, under (**c**)onversion, thin (**V**)olume, (**t**)hin pool, (**T**)hin pool data, raid or thin pool m(**e**)tadata  
+- 2 bit — **_Permissions:_** (**w**)riteable, (**r**)ead-only, (**R**)ead-only activation of non-read-only volume  
+- 3 bit — **_Allocation policy:_** (**a**)nywhere, (**c**)ontiguous, (**i**)nherited, c(**l**)ing, (**n**)ormal. This is capitalised if the volume is currently locked against allocation changes, for example during pvmove(**8**).
+- 4 bit — fixed (**m**)inor  
+5 bit — **_State:_** (**a**)ctive, (**s**)uspended, (**I**)nvalid snapshot, invalid (**S**)uspended snapshot, snapshot (**m**)erge failed, suspended snapshot (**M**)erge failed, mapped (**d**)evice present without tables, mapped device present with (**i**)nactive table
+- 6 bit — device (**o**)pen  
+- 7 bit — **_Target type:_** (**m**)irror, (**r**)aid, (**s**)napshot, (**t**)hin, (**u**)nknown, (**v**)irtual. This groups logical volumes related to the same kernel target together. So, for example, mirror images, mirror logs as well as mirrors themselves appear as (**m**) if they use the original device-mapper mirror kernel driver; whereas the raid equivalents using the md raid kernel driver all appear as (**r**). Snapshots using the original device-mapper driver appear as (**s**); whereas snapshots of thin volumes using the new thin provisioning driver appear as (**t**).  
+- 8 bit — Newly-allocated data blocks are overwritten with blocks of (**z**)eroes before use.
+- 9 bit — (**p**)artial: One or more of the Physical Volumes this Logical Volume uses is missing from the system.
 
 #                                                         1.3 Создание файловой системы и монтирование тома
 
@@ -528,6 +599,18 @@ LVM также позволяет уменьшить размер тома. Дл
 ** Установить dmeventd, который может не стоять, но который нужен чтобы все работало!**
 
 
+#                                                     Конфигурация LVM
+
+
+Файл с настройками LVM:
+
+      /etc/lvm/lvm.conf
+
+Метаинформация и архив совершённых действий с сисетмой LVM, сохраняется в каталоге:
+
+      /etc/lvm/archives/
+
+
 
 #                                                     1.8 Перемещение физических и логических томов
 
@@ -543,6 +626,69 @@ LVM также позволяет уменьшить размер тома. Дл
 
 
 ___
+
+
+#                                                       1.9     Настройка SSD кеширования LVM Cache
+
+[Настройка SSD кеширования LVM Cache в CentOS](https://winitpro.ru/index.php/2020/11/20/ssd-lvm-cache-v-linux-centos/)
+
+Как использовать SSD диск в качестве кэширующего устройства на сервере с CentOS Linux на примере LVM Cache. В такой конфигурации кэширующее и кэшируемое устройство должно входить в одну группу томов LVM, а отключение/включение кэша можно выполнять без на ходу без без перезагрузок и перемонтирования.
+
+>SSD-кэширование — технология, когда твердотельные SSD накопители используются в качестве буфера для часто запрашиваемых данных. Система определяет данные по степени “теплоты” и перемещает их на быстрый накопитель, используемый в качестве кэширующего диска. Кэш позволяется системе получать доступ к данным в несколько раз быстрее, чем если бы они были получены с более медленного жесткого диска.
+
+Создадим 3 кэша для 3 точек монтирования. Делать кеши будем сразу в процессе инсталяции системы (можно и позже). После конфигурации и установки системы, до первой перезагрузки, можно создать кеши для выбранных точек монтирования. При инсталяции системы был создан LVM с точками монтирования: /home; /var; /var_backup для которых и создадим кеши.
+SSD Disk 240Gb
+PV - /dev/sde (SSD диск)
+VG - ol8
+LV:
+  - /dev/mapper/home_ol8
+  - /dev/mapper/var_ol8
+  - /dev/mapper/var_backup_ol8
+
+Поскольку LV тома с данными уже созданы, то необходимо подготовить кеши на SSD диске
+
+      Инициализируем SSD диск для работы с LVM:
+
+      - pvcreate /dev/sde    <---- (небольшой баг при создании диска - если диск размечен как gpt, то при вызове такой команды вываливается ошибка "pvcreate: Can't use /dev/sde: device is           partitioned".        Тут или создать раздел на диске, или разметить его как msdos )
+
+      На SSD диске создадим разделы под метаданные:
+
+      - lvcreate -L 5G -n ssd_meta_home ol8 /dev/sde
+      - lvcreate -L 5G -n ssd_meta_var ol8 /dev/sde
+      - lvcreate -L 5G -n ssd_meta_var_backup ol8 /dev/sde
+
+      На SSD диске создадим разделы под данные кеша:
+
+      - lvcreate -l 16000 -n ssd_data_home ol8 /dev/sde
+      - lvcreate -l 16000 -n ssd_data_var ol8 /dev/sde
+      - lvcreate -l 16000 -n ssd_data_var_backup ol8 /dev/sde
+
+
+      Создаём кеширующие пулы:
+
+      - lvconvert **--type cache-pool** --poolmetadata ol8/ssd_meta_home ol8/ssd_data_home
+      - lvconvert **--type cache-pool** --poolmetadata ol8/ssd_meta_var ol8/ssd_data_var
+      - lvconvert **--type cache-pool** --poolmetadata ol8/ssd_meta_var_backup ol8/ssd_data_var_backup
+
+      Подключаем созданные кеши к рабочим точкам /home; /var; /var_backup:
+
+      - lvconvert **--type cache** **--cachemode writeback** **--cachepool** ol8/ssd_data_home ol8/home
+      - lvconvert **--type cache** **--cachemode writeback** **--cachepool** ol8/ssd_data_var ol8/var
+      - lvconvert **--type cache** **--cachemode writeback** **--cachepool** ol8/ssd_data_var_backup ol8/var_backup
+
+          Выбранный режим кэширования (writeback) относится только к операциям записи. На скорость чтения данных с LVM тома с кэшем он не влияет.
+
+      Есть два режима кеширования:
+
+          >Writeback — данные сначала пишутся в кэш, затем на диск. Это более производительный вариант. При сбое кэширующего SSD диска, вы потеряете данные, которые не успели записаться на HDD. Хотя и не рекомендуется использовать этот режим на серверах с SSD без RAID, мне кажется с учетом надежности SSD дисков, это вполне рабочее решение.
+
+          >Writethrough — данные сразу пишутся одновременно на диск и в кэш, после чего наиболее часто используемые попадают в кэш. Это безопасный вариант, подходит для серверов с 1*SSD, но гораздо менее производительный.
+
+      Для смены режима, используются команды:
+
+        # lvchange --cachemode writeback ol8
+        # lvchange --cachemode writethrough ol8
+
 
 
 
@@ -783,7 +929,7 @@ ___
 
 6.      Home разде со снапшотами
 
-                [root@lvm ~]# lvcreate -n LogVol_Home -L 2G VolGroup00  <--------------- создали новый раздел в LVM группе  VolGroup00
+            [root@lvm ~]# lvcreate -n LogVol_Home -L 2G VolGroup00  <--------------- создали новый раздел в LVM группе  VolGroup00
                 Logical volume "LogVol_Home" created.
 
             [root@lvm ~]# mkfs.xfs /dev/VolGroup00/LogVol_Home  < ------------- Создаём файловую систему на разделе
