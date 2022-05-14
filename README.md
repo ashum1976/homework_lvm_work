@@ -690,7 +690,11 @@ LV:
         # lvchange --cachemode writethrough ol8
 
 
+##### Если нужно заменить SSD диск, обязательно нужно удалить кэш:
 
+        # lvconvert --uncache /dev/mapper/ol8-home
+        # lvconvert --uncache /dev/mapper/ol8-var
+        # lvconvert --uncache /dev/mapper/ol8-var_backup
 
 
 #                                                       2. Домашнне задание
